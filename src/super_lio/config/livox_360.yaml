@@ -1,16 +1,13 @@
 /**:
   ros__parameters:
-    lio.map.save_map: false
-    lio.map.if_filter: true
-    lio.map.save_map_dir: "map"
-    lio.map.map_name: "map.pcd"
-    lio.map.ds_size: 0.25
-    lio.map.save_interval: 500
+    lio.map.save_map: true
+    lio.map.save_map_dir: "Super_LIO_Results"
+    lio.map.save_interval: 20
 
-    lio.ros.lidar_topic: "/livox/lidar"
-    lio.ros.imu_topic: "/livox/imu"
+    lio.ros.lidar_topic: "/livox/lidar_smart"
+    lio.ros.imu_topic: "/imu_smart"
 
-    lio.sensor.lidar_type: 1
+    lio.sensor.lidar_type: 2
     lio.sensor.blind: 2.0
     lio.sensor.maxrange: 60.0
     lio.sensor.filter_rate: 3
