@@ -347,6 +347,8 @@ void ROSWrapper::setupIO(){
 void ROSWrapper::imuHandler(const sensor_msgs::msg::Imu::SharedPtr msg){
   IMUData data;
   data.secs = stampToSec(msg->header.stamp);
+  if (data.secs == last_timestamp_imu_) return;
+  if (!std::isfinite(msg->linear_acceleration.x)) return;
   data.acc  = V3(msg->linear_acceleration.x,
                  msg->linear_acceleration.y,
                  msg->linear_acceleration.z);
@@ -437,7 +439,7 @@ void ROSWrapper::livoxHandler(const livox_ros_driver2::msg::CustomMsg::SharedPtr
   }
   lidar_data.start_time = stampToSec(msg->header.stamp);
   lidar_data.end_time   = lidar_data.start_time + offset_time;
-  lidar_buffer_.push_back(lidar_data);
+  if(lidar_data.pc->points.size() > 50) lidar_buffer_.push_back(lidar_data);
 }
 
 
@@ -454,20 +456,21 @@ void ROSWrapper::stdMsgHandler(const sensor_msgs::msg::PointCloud2::SharedPtr ms
 
   case LID_TYPE::HESAI16:
   {
-    pcl::PointCloud<hesai_ros::Point> pl_orig;
+    pcl::PointCloud<pcl::PointXYZ> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
     lidar_data.pc->reserve(pl_orig.size() / g_filter_rate + 1);
-    const double time_begin = pl_orig.points[0].timestamp;
+    double time_begin = stampToSec(msg->header.stamp);
     lidar_data.start_time = time_begin;
-    for(std::size_t i = 0; i < pl_orig.size(); i += g_filter_rate)
-    {
+    double fake_offset = 0.0;
+    double increment = 0.001 / (double)(pl_orig.size() + 1);
+    for(std::size_t i = 0; i < pl_orig.size(); i += g_filter_rate) {
       auto& pt = pl_orig.points[i];
-      if (!validPoint(pt.x, pt.y, pt.z)) continue;
-      offset_time = pt.timestamp - time_begin;
-      lidar_data.pc->emplace_back(
-          pt.x, pt.y, pt.z, pt.intensity, offset_time);
+      fake_offset += increment;
+      if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z)) continue;
+      if (pt.x == 0.0 && pt.y == 0.0 && pt.z == 0.0) continue;
+      lidar_data.pc->emplace_back(pt.z, -pt.x, pt.y, 1.0, fake_offset);
     }
-    lidar_data.end_time = time_begin + offset_time;
+    lidar_data.end_time = time_begin + 0.001;
     break;
   }
   case LID_TYPE::VEL_NCLT:
@@ -525,7 +528,7 @@ void ROSWrapper::stdMsgHandler(const sensor_msgs::msg::PointCloud2::SharedPtr ms
     return;
   }
   
-  lidar_buffer_.push_back(lidar_data);
+  if(lidar_data.pc->points.size() > 50) lidar_buffer_.push_back(lidar_data);
 }
 
 
@@ -533,7 +536,7 @@ bool ROSWrapper::sync_measure(MeasureGroup& meas){
   if (lidar_buffer_.empty() || imu_buffer_.empty()) {
     return false;
   }
-
+  
   if (!lidar_pushed_) {
     meas.lidar = lidar_buffer_.front();
     lidar_pushed_ = true;
